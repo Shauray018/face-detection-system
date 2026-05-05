@@ -8,8 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, BackgroundTasks
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -79,4 +78,17 @@ async def stream_video():
             "Pragma": "no-cache",
             "Access-Control-Allow-Origin": "*",
         },
+    )
+
+# in backend/app/api/video.py — add this route
+@router.get("/latest-frame", summary="Get the latest annotated frame as JPEG")
+async def latest_frame():
+    """Returns the most recent annotated frame as a plain JPEG image."""
+    jpeg = stream_manager.get_latest_frame("main")
+    if not jpeg:
+        raise HTTPException(status_code=404, detail="No frames yet")
+    return Response(
+        content=jpeg,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "no-cache"},
     )

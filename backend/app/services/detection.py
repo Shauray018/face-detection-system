@@ -19,7 +19,7 @@ import uuid
 import logging
 from dataclasses import dataclass
 from typing import Optional
-
+import time
 import face_recognition
 import numpy as np
 from PIL import Image, ImageDraw
@@ -109,14 +109,6 @@ def _draw_roi(image: Image.Image, x1: int, y1: int, x2: int, y2: int) -> Image.I
 
 
 def detect_and_annotate(jpeg_bytes: bytes) -> DetectionResult:
-    """
-    Main entry point.
-
-    1. Decode JPEG bytes → PIL Image
-    2. Run face detection (face_recognition, no OpenCV)
-    3. If a face is found: compute AABB, draw ROI with Pillow
-    4. Return DetectionResult with annotated JPEG and AABB coords
-    """
     frame_id = str(uuid.uuid4())
 
     try:
@@ -126,49 +118,45 @@ def detect_and_annotate(jpeg_bytes: bytes) -> DetectionResult:
         return DetectionResult(frame_id=frame_id, detected=False, annotated_jpeg=jpeg_bytes)
 
     frame_w, frame_h = image.size
-    rgb_array = _pil_to_rgb_array(image)
 
-    # face_recognition returns list of (top, right, bottom, left)
-    # model="hog" is fast; use model="cnn" for GPU accuracy
-    locations = face_recognition.face_locations(rgb_array, model="hog")
+    # Downsample to 320wide max for detection — massively faster HOG
+    scale = min(1.0, 320 / frame_w)
+    small = image.resize((int(frame_w * scale), int(frame_h * scale)))
+    rgb_array = _pil_to_rgb_array(small)
+
+    t0 = time.time()
+    locations = face_recognition.face_locations(rgb_array, model="hog", number_of_times_to_upsample=0)
+    logger.info(f"Detection took {(time.time()-t0)*1000:.0f}ms")
 
     if not locations:
-        # No face found — return original frame unchanged
         buf = io.BytesIO()
-        image.save(buf, format="JPEG", quality=85)
+        image.save(buf, format="JPEG", quality=80)
         return DetectionResult(
-            frame_id=frame_id,
-            detected=False,
-            frame_width=frame_w,
-            frame_height=frame_h,
+            frame_id=frame_id, detected=False,
+            frame_width=frame_w, frame_height=frame_h,
             annotated_jpeg=buf.getvalue(),
         )
 
-    # Only one face expected — take the first
     top, right, bottom, left = locations[0]
 
-    # Axis-aligned minimal bounding box
-    x1, y1 = left, top
-    x2, y2 = right, bottom
+    # Scale coords back up to original frame size
+    x1 = int(left / scale)
+    y1 = int(top / scale)
+    x2 = int(right / scale)
+    y2 = int(bottom / scale)
     w = x2 - x1
     h = y2 - y1
-    cx = x1 + w / 2
-    cy = y1 + h / 2
 
-    # Draw ROI using Pillow only
     annotated_image = _draw_roi(image, x1, y1, x2, y2)
-
     buf = io.BytesIO()
-    annotated_image.save(buf, format="JPEG", quality=85)
+    annotated_image.save(buf, format="JPEG", quality=80)
 
     return DetectionResult(
-        frame_id=frame_id,
-        detected=True,
+        frame_id=frame_id, detected=True,
         x1=x1, y1=y1, x2=x2, y2=y2,
         width=w, height=h,
-        center_x=cx, center_y=cy,
-        confidence=None,           # face_recognition HOG doesn't expose a score
-        frame_width=frame_w,
-        frame_height=frame_h,
+        center_x=x1 + w / 2, center_y=y1 + h / 2,
+        confidence=None,
+        frame_width=frame_w, frame_height=frame_h,
         annotated_jpeg=buf.getvalue(),
     )
