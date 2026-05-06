@@ -2,7 +2,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-const INGEST_URL = "http://localhost:8000/video/ingest";
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:8000";
+const INGEST_URL = `${API_BASE}/video/ingest`;
+
 const TARGET_FPS = 15;
 
 export default function CameraCapture() {

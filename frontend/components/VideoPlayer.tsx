@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { fetchLatestROI, ROIRecord } from "../lib/api";
 
-const BACKEND = "http://localhost:8000";
+const BACKEND =
+  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:8000";
 const POLL_MS = 50; // ~20fps
 
 export default function VideoPlayer() {

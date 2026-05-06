@@ -1,5 +1,5 @@
-// frontend/lib/api.ts
-const API_BASE = "http://localhost:8000";
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:8000";
 
 export const STREAM_URL = `${API_BASE}/video/stream`;
 export const ROI_LATEST_URL = `${API_BASE}/roi/latest`;
